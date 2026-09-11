@@ -1,20 +1,25 @@
 """
 App FastAPI.
 
-Dos endpoints, y el segundo existe para depurar:
+    GET /              la pagina, con el formulario
+    GET /buscar/html   fragmento HTML con los resultados, para HTMX
+    GET /buscar?q=...  lo mismo en JSON
+    GET /filtros?...   solo el WHERE, con los filtros puestos a mano
 
-    GET /buscar?q=...   la busqueda de verdad: LLM + filtros + semantica
-    GET /filtros?...    solo el WHERE, con los filtros puestos a mano
-
-Cuando una consulta devuelve algo raro, /filtros dice si el problema esta en
-el SQL o en lo que extrajo el modelo, que son las dos cosas que se pueden
-confundir cuando todo pasa por la misma ruta.
+Las dos ultimas existen para depurar. /buscar en JSON permite ver la
+respuesta entera sin el front de por medio, y /filtros dice si un resultado
+raro viene del SQL o de lo que extrajo el modelo, que son las dos cosas que
+se confunden cuando todo pasa por la misma ruta.
 """
 
+import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, Query, Request
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from buscador import buscar, buscar_por_filtros
 from db import conectar, crear_esquema
@@ -30,10 +35,20 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def ciclo_de_vida(app: FastAPI):
-    """Crea el esquema al arrancar, por si la BD todavia no existe."""
+    """Prepara la BD y calienta el modelo antes de aceptar peticiones."""
     con = conectar()
     crear_esquema(con)
     con.close()
+
+    # Importar embeddings carga el modelo (~450 MB, unos 10 segundos). Si se
+    # deja para la primera busqueda, esa peticion tarda 15 segundos y las
+    # siguientes 1,3: medido. Mejor pagarlo en el arranque, donde no hay nadie
+    # esperando, que en la primera consulta de quien abre la demo.
+    import embeddings  # noqa: F401
+
+    log = logging.getLogger("main")
+    log.info("Modelo cargado. Listo en http://127.0.0.1:8000")
+
     yield
 
 
@@ -42,6 +57,9 @@ app = FastAPI(
     description="Busqueda sobre el catalogo de H&M por lenguaje natural.",
     lifespan=ciclo_de_vida,
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+plantillas = Jinja2Templates(directory="templates")
 
 
 def obtener_conexion():
@@ -113,3 +131,59 @@ def endpoint_filtros(
         "filtros_aplicados": filtros.model_dump(exclude={"consulta_semantica"}),
         "resultados": resultados,
     }
+
+
+# ---------------------------------------------------------------------------
+# Front
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def pagina(request: Request):
+    """La pagina completa. A partir de aqui todo lo mueve HTMX."""
+    return plantillas.TemplateResponse(request, "index.html")
+
+
+# Campos de SearchFilters que acaban en el WHERE, en el orden en que se
+# ensenan. consulta_semantica no esta: no es un filtro duro, y el panel la
+# muestra aparte justo para dejar clara esa diferencia.
+CAMPOS_DUROS = [
+    "publico", "categoria", "colores", "colores_excluidos", "tono", "estampado",
+]
+
+
+@app.get("/buscar/html", response_class=HTMLResponse, include_in_schema=False)
+def endpoint_buscar_html(
+    request: Request,
+    q: str = Query(),
+    limite: int = Query(default=24, ge=1, le=100),
+    con=Depends(obtener_conexion),
+):
+    """
+    Fragmento de resultados que HTMX mete en la pagina.
+
+    Devuelve HTML y no JSON a proposito: con HTMX el servidor manda la vista
+    ya montada y el navegador no necesita ninguna plantilla ni estado propio.
+    """
+    respuesta = buscar(con, q, limite)
+
+    # Los filtros que se ensenan en el panel son los PEDIDOS, no los
+    # aplicados: lo interesante es lo que entendio el modelo. Que alguno se
+    # haya soltado despues se marca tachandolo.
+    pedidos = respuesta["filtros_pedidos"]
+    campos_duros = [
+        (campo, ", ".join(pedidos[campo]) if isinstance(pedidos[campo], list)
+         else pedidos[campo])
+        for campo in CAMPOS_DUROS
+        if pedidos[campo]
+    ]
+
+    return plantillas.TemplateResponse(
+        request,
+        "_resultados.html",
+        {
+            "respuesta": respuesta,
+            "campos_duros": campos_duros,
+            # ensure_ascii False para que las tildes se vean como tildes.
+            "filtros_json": json.dumps(pedidos, indent=2, ensure_ascii=False),
+        },
+    )

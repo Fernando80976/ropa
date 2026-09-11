@@ -15,11 +15,14 @@ import sqlite3
 
 from models import SearchFilters
 
-# Columnas que se devuelven al front. article_id no esta aqui porque lo anade
-# el SELECT como min(article_id); es la que forma la URL de la imagen en el
-# catalogo de H&M, asi que tiene que salir si o si.
+# Columnas que se devuelven al front.
 # Van cualificadas con "a." porque la busqueda semantica hace JOIN contra
 # vec_productos, que tambien tiene una columna product_code.
+#
+# article_id no esta en la lista: lo anade cada SELECT como min(article_id).
+# Se devuelve porque es el identificador estable de la variante concreta; el
+# dataset de Kaggle trae las fotos en una carpeta aparte que aqui no se ha
+# descargado, asi que el front no las muestra.
 COLUMNAS_RESULTADO = """
     a.product_code,
     a.prod_name,

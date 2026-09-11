@@ -3,3 +3,5 @@
 *.db
 articles.csv
 __pycache__/
+# Modelo de sentence-transformers descargado por HuggingFace
+.cache/

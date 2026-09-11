@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Buscador de ropa</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+  <!-- HTMX por CDN: el proyecto no tiene build step ni node_modules. -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"
+          integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2"
+          crossorigin="anonymous"></script>
+</head>
+<body>
+
+<header>
+  <h1>Buscador de ropa</h1>
+  <p class="subtitulo">
+    Escribe lo que buscas como se lo dirias a un dependiente.
+    Un LLM traduce la frase a filtros; el SQL los aplica y los embeddings
+    ordenan el resto.
+  </p>
+</header>
+
+<!-- hx-get + hx-target: HTMX pide el fragmento y lo mete en #panel, sin
+     recargar la pagina. hx-indicator ensena el estado de carga mientras
+     tanto. Al pulsar Enter se dispara igual, porque escucha el submit. -->
+<form class="buscador"
+      hx-get="/buscar/html"
+      hx-target="#panel"
+      hx-indicator="#cargando">
+  <input type="search"
+         name="q"
+         id="q"
+         placeholder="chaqueta vaquera oversize para una boda en verano, que no sea negra"
+         autocomplete="off"
+         required
+         autofocus>
+  <button type="submit">Buscar</button>
+</form>
+
+<ul class="ejemplos">
+  <!-- Ejemplos que se rellenan solos: la primera barrera de una demo es no
+       saber que escribir. -->
+  <li><button type="button" class="ejemplo">vestido rojo largo para una boda</button></li>
+  <li><button type="button" class="ejemplo">algo abrigado para el invierno, que no sea negro</button></li>
+  <li><button type="button" class="ejemplo">pijama comodo para un nino</button></li>
+  <li><button type="button" class="ejemplo">camiseta de hombre azul oscuro lisa</button></li>
+</ul>
+
+<div id="cargando" class="cargando">
+  <span class="punto"></span><span class="punto"></span><span class="punto"></span>
+  Consultando al modelo y buscando en el catalogo...
+</div>
+
+<div id="panel">
+  <p class="vacio">Escribe una consulta para empezar.</p>
+</div>
+
+<script>
+  // Un ejemplo rellena el input y lanza la busqueda.
+  document.querySelectorAll('.ejemplo').forEach(function (boton) {
+    boton.addEventListener('click', function () {
+      var input = document.getElementById('q');
+      input.value = boton.textContent.trim();
+      htmx.trigger(document.querySelector('.buscador'), 'submit');
+    });
+  });
+</script>
+
+</body>
+</html>

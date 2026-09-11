@@ -1,0 +1,296 @@
+/*
+  Hoja propia, sin framework. Un solo fichero y sin preprocesador: el proyecto
+  no tiene build step.
+
+  Los colores de las muestras salen de perceived_colour_master_name, las 20
+  familias del dataset. Son aproximaciones a ojo: el dataset da el nombre de
+  la familia, no el valor hexadecimal.
+*/
+
+:root {
+  --fondo: #fbfbfa;
+  --tinta: #22201d;
+  --suave: #6c6862;
+  --linea: #e2ded8;
+  --tarjeta: #ffffff;
+  --acento: #2f5d50;
+  --aviso-fondo: #fdf6e3;
+  --aviso-linea: #d9c48a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+  max-width: 78rem;
+  background: var(--fondo);
+  color: var(--tinta);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+h1 { margin: 0 0 .3rem; font-size: 1.6rem; letter-spacing: -.01em; }
+h2 { font-size: 1rem; margin: 0 0 .9rem; font-weight: 600; }
+h3 { font-size: .95rem; margin: 0 0 .2rem; }
+
+.subtitulo { margin: 0 0 1.8rem; color: var(--suave); max-width: 46rem; }
+.apunte { color: var(--suave); font-size: .8rem; font-weight: 400; }
+
+/* --- Formulario --------------------------------------------------------- */
+
+.buscador { display: flex; gap: .6rem; }
+
+.buscador input {
+  flex: 1;
+  padding: .75rem .9rem;
+  border: 1px solid var(--linea);
+  border-radius: 7px;
+  background: var(--tarjeta);
+  font-size: 1rem;
+  font-family: inherit;
+  color: inherit;
+}
+
+.buscador input:focus {
+  outline: 2px solid var(--acento);
+  outline-offset: -1px;
+}
+
+.buscador button {
+  padding: .75rem 1.4rem;
+  border: 0;
+  border-radius: 7px;
+  background: var(--acento);
+  color: #fff;
+  font-size: 1rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.buscador button:hover { background: #26493f; }
+
+.ejemplos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin: .8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ejemplo {
+  padding: .3rem .65rem;
+  border: 1px solid var(--linea);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--suave);
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+
+.ejemplo:hover { border-color: var(--acento); color: var(--acento); }
+
+/* --- Estado de carga ----------------------------------------------------
+   HTMX pone la clase htmx-request en el elemento indicado con hx-indicator
+   mientras la peticion esta en vuelo. */
+
+.cargando {
+  display: none;
+  align-items: center;
+  gap: .4rem;
+  margin-top: 1.6rem;
+  color: var(--suave);
+  font-size: .9rem;
+}
+
+.cargando.htmx-request { display: flex; }
+
+.punto {
+  width: .4rem;
+  height: .4rem;
+  border-radius: 50%;
+  background: var(--acento);
+  animation: latido 1.1s infinite ease-in-out;
+}
+
+.punto:nth-child(2) { animation-delay: .18s; }
+.punto:nth-child(3) { animation-delay: .36s; }
+
+@keyframes latido {
+  0%, 80%, 100% { opacity: .25; }
+  40%           { opacity: 1; }
+}
+
+/* Respeta a quien ha pedido no ver animaciones. */
+@media (prefers-reduced-motion: reduce) {
+  .punto { animation: none; opacity: .6; }
+}
+
+/* --- Aviso de relajado --------------------------------------------------- */
+
+.aviso {
+  margin: 1.8rem 0 0;
+  padding: .75rem .9rem;
+  border: 1px solid var(--aviso-linea);
+  border-radius: 7px;
+  background: var(--aviso-fondo);
+  font-size: .9rem;
+}
+
+.aviso code {
+  padding: .05rem .3rem;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .06);
+  font-size: .85em;
+}
+
+/* --- Disposicion --------------------------------------------------------- */
+
+.columnas {
+  display: grid;
+  grid-template-columns: 1fr 20rem;
+  gap: 2rem;
+  margin-top: 1.8rem;
+  align-items: start;
+}
+
+/* En pantalla estrecha el panel de filtros pasa arriba: es lo que explica
+   los resultados, asi que no puede quedar enterrado al final. */
+@media (max-width: 62rem) {
+  .columnas { grid-template-columns: 1fr; }
+  .panel-filtros { order: -1; }
+}
+
+.vacio { color: var(--suave); margin-top: 1.8rem; }
+
+/* --- Tarjetas ------------------------------------------------------------ */
+
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 1rem;
+}
+
+.tarjeta {
+  padding: .9rem;
+  border: 1px solid var(--linea);
+  border-radius: 9px;
+  background: var(--tarjeta);
+}
+
+.muestra {
+  position: relative;
+  height: 4.5rem;
+  margin: -.9rem -.9rem .8rem;
+  border-radius: 9px 9px 0 0;
+  background: #ddd;
+}
+
+.distancia {
+  position: absolute;
+  right: .4rem;
+  bottom: .4rem;
+  padding: .1rem .35rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .88);
+  color: var(--tinta);
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tipo { margin: 0 0 .5rem; color: var(--suave); font-size: .8rem; }
+
+.descripcion {
+  margin: 0 0 .7rem;
+  font-size: .82rem;
+  line-height: 1.45;
+  color: #4a463f;
+}
+
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.etiquetas li {
+  padding: .12rem .4rem;
+  border-radius: 4px;
+  background: #f0ede8;
+  color: var(--suave);
+  font-size: .7rem;
+}
+
+.etiqueta--variantes { background: #e7efec; color: var(--acento); }
+
+/* --- Panel de filtros ---------------------------------------------------- */
+
+.panel-filtros {
+  padding: 1rem;
+  border: 1px solid var(--linea);
+  border-radius: 9px;
+  background: var(--tarjeta);
+  position: sticky;
+  top: 1rem;
+}
+
+.panel-filtros h3 { margin: 1.2rem 0 .4rem; font-size: .8rem; }
+
+.json {
+  margin: .8rem 0 0;
+  padding: .7rem;
+  border-radius: 6px;
+  background: #1f2d28;
+  color: #d6e4de;
+  font: .75rem/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.reparto { margin: 0; }
+.reparto dt { font-size: .75rem; color: var(--suave); margin-top: .7rem; }
+.reparto dd { margin: .3rem 0 0; font-size: .85rem; }
+
+.filtro {
+  display: inline-block;
+  margin: 0 .25rem .25rem 0;
+  padding: .12rem .4rem;
+  border-radius: 4px;
+  background: #e7efec;
+  color: var(--acento);
+  font-size: .75rem;
+}
+
+.filtro--relajado {
+  background: #f0ede8;
+  color: var(--suave);
+  text-decoration: line-through;
+}
+
+/* --- Muestras de color ---------------------------------------------------
+   Una clase por familia de perceived_colour_master_name. */
+
+.muestra--black          { background: #1c1c1c; }
+.muestra--white          { background: #f4f4f2; border-bottom: 1px solid var(--linea); }
+.muestra--grey           { background: #9a9a99; }
+.muestra--beige          { background: #d8c9ae; }
+.muestra--brown          { background: #7a5638; }
+.muestra--mole           { background: #8d7f6f; }
+.muestra--blue           { background: #3a5f97; }
+.muestra--turquoise      { background: #3fa9a0; }
+.muestra--green          { background: #4a7a46; }
+.muestra--khaki-green    { background: #6f7248; }
+.muestra--yellowish-green{ background: #a5b34a; }
+.muestra--bluish-green   { background: #3d8878; }
+.muestra--yellow         { background: #e0be4e; }
+.muestra--orange         { background: #d98038; }
+.muestra--red            { background: #b23c37; }
+.muestra--pink           { background: #dd9aae; }
+.muestra--lilac-purple   { background: #8e7aa8; }
+.muestra--metal          { background: linear-gradient(135deg, #b9b9bd, #8a8a90); }
+.muestra--unknown,
+.muestra--undefined      { background: repeating-linear-gradient(45deg, #e6e3de, #e6e3de 6px, #dedbd5 6px, #dedbd5 12px); }

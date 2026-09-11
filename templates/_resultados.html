@@ -1,0 +1,105 @@
+{#
+  Fragmento que HTMX inserta en #panel. No es una pagina: no lleva <html>.
+
+  Son dos columnas: los resultados y, al lado, lo que el LLM entendio. El
+  panel de la derecha es el que convierte la demo de "parece magia" a "se ve
+  la ingenieria", asi que no es un detalle de depuracion escondido.
+#}
+
+{% if respuesta.filtros_relajados %}
+  <div class="aviso">
+    <strong>Se amplio la busqueda.</strong>
+    No habia nada que cumpliera todo lo que pediste, asi que se solto
+    {% for campo in respuesta.filtros_relajados %}
+      <code>{{ campo }}</code>{% if not loop.last %}, {% endif %}
+    {% endfor %}.
+  </div>
+{% endif %}
+
+<div class="columnas">
+
+  <section class="resultados">
+    <h2>
+      {{ respuesta.total }}
+      {{ "prenda" if respuesta.total == 1 else "prendas" }}
+      <span class="apunte">ordenadas por parecido con la consulta</span>
+    </h2>
+
+    {% if not respuesta.resultados %}
+      <p class="vacio">
+        No hay ninguna prenda en el catalogo, ni siquiera relajando los
+        filtros. Prueba con otra frase.
+      </p>
+    {% endif %}
+
+    <div class="rejilla">
+      {% for prenda in respuesta.resultados %}
+        <article class="tarjeta">
+          {#
+            El dataset no trae las fotos (van en una carpeta aparte de Kaggle
+            que no se ha descargado), asi que en su lugar va una muestra del
+            color con el nombre de la familia debajo.
+          #}
+          <div class="muestra muestra--{{ prenda.perceived_colour_master_name | replace(' ', '-') | replace('/', '-') | lower }}"
+               title="{{ prenda.perceived_colour_master_name }} / {{ prenda.perceived_colour_value_name }}">
+            <span class="distancia" title="Distancia vectorial: menor es mas parecido">
+              {{ "%.2f" | format(prenda.distancia) }}
+            </span>
+          </div>
+
+          <h3>{{ prenda.prod_name }}</h3>
+          <p class="tipo">{{ prenda.product_type_name }}</p>
+          <p class="descripcion">{{ prenda.detail_desc | truncate(140) }}</p>
+
+          <ul class="etiquetas">
+            <li>{{ prenda.index_group_name }}</li>
+            <li>{{ prenda.perceived_colour_master_name }}</li>
+            <li>{{ prenda.perceived_colour_value_name }}</li>
+            {% if prenda.graphical_appearance_name != 'Solid' %}
+              <li>{{ prenda.graphical_appearance_name }}</li>
+            {% endif %}
+            {% if prenda.variantes > 1 %}
+              <li class="etiqueta--variantes">
+                +{{ prenda.variantes - 1 }}
+                {{ "color" if prenda.variantes == 2 else "colores" }}
+              </li>
+            {% endif %}
+          </ul>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="panel-filtros">
+    <h2>Lo que entendio el modelo</h2>
+    <p class="apunte">
+      La frase pasa por un LLM que devuelve este JSON. Se valida contra un
+      esquema antes de tocar la base de datos.
+    </p>
+
+    <pre class="json">{{ filtros_json }}</pre>
+
+    <h3>Como se uso</h3>
+    <dl class="reparto">
+      <dt>Filtros duros (WHERE en SQL)</dt>
+      <dd>
+        {% if campos_duros %}
+          {% for campo, valor in campos_duros %}
+            <span class="filtro {{ 'filtro--relajado' if campo in respuesta.filtros_relajados }}">
+              {{ campo }} = {{ valor }}
+            </span>
+          {% endfor %}
+          {% if respuesta.filtros_relajados %}
+            <p class="apunte">Tachados: se soltaron para poder devolver algo.</p>
+          {% endif %}
+        {% else %}
+          <span class="apunte">Ninguno: la busqueda fue solo semantica.</span>
+        {% endif %}
+      </dd>
+
+      <dt>Consulta semantica (embeddings)</dt>
+      <dd><em>{{ respuesta.filtros_aplicados.consulta_semantica }}</em></dd>
+    </dl>
+  </aside>
+
+</div>
