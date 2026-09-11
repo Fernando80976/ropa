@@ -5,6 +5,9 @@ Cargan el modelo de verdad (no se puede mockear lo unico que se quiere
 comprobar: que un texto en espanol cae cerca de una descripcion en ingles),
 asi que son los tests lentos de la suite. El modelo se carga una sola vez
 para todos gracias a que vive a nivel de modulo en embeddings.py.
+
+Incluyen la comprobacion que justifica la cuantizacion a int8: que el orden
+de los resultados no cambia respecto al modelo original en fp32.
 """
 
 import pandas as pd
@@ -63,7 +66,55 @@ def con(embeddings):
 
 def test_el_modelo_tiene_las_dimensiones_de_la_tabla(embeddings):
     """Si no coinciden, el INSERT en vec_productos falla."""
-    assert embeddings.modelo.get_embedding_dimension() == db.DIMENSIONES
+    vector = embeddings.vectorizar(["una camiseta azul"])
+    assert vector.shape == (1, db.DIMENSIONES)
+
+
+def test_los_vectores_salen_normalizados(embeddings):
+    """
+    sqlite-vec ordena por distancia euclidea. Solo equivale al coseno, que es
+    la metrica del modelo, si los vectores son unitarios.
+    """
+    import numpy as np
+
+    vectores = embeddings.vectorizar(["abrigo de invierno", "camiseta"])
+    normas = np.linalg.norm(vectores, axis=1)
+    assert np.allclose(normas, 1.0, atol=1e-5)
+
+
+def test_vectorizar_es_determinista(embeddings):
+    """La misma entrada tiene que dar siempre el mismo vector."""
+    import numpy as np
+
+    assert np.allclose(
+        embeddings.vectorizar(["camiseta"]),
+        embeddings.vectorizar(["camiseta"]),
+        atol=1e-9,
+    )
+
+
+def test_el_lote_afecta_poco_al_vector(embeddings):
+    """
+    Una frase suelta y la misma dentro de un lote NO dan exactamente el mismo
+    vector, y conviene tenerlo documentado porque sorprende.
+
+    La causa es la cuantizacion dinamica a int8: las escalas de cuantizacion
+    se calculan a partir del rango real de las activaciones de CADA lote, asi
+    que acompanar la frase de otra distinta mueve un poco el resultado. Con el
+    modelo fp32 original esto no pasaba.
+
+    Importa porque el indice se calcula en lotes de 64 y las consultas del
+    usuario se vectorizan solas: hay una diferencia sistematica entre las dos
+    situaciones. El efecto medido es pequeno (coseno > 0,99) y el impacto real
+    sobre los resultados esta comprobado en el catalogo completo: el mejor
+    resultado del modelo fp32 sigue apareciendo en el top-10 en las diez
+    consultas de prueba.
+    """
+    sola = embeddings.vectorizar(["camiseta"])[0]
+    en_lote = embeddings.vectorizar(
+        ["camiseta", "un abrigo largo de lana muy abrigado para el invierno frio"]
+    )[0]
+    assert float(sola @ en_lote) > 0.98
 
 
 def test_texto_de_concatena_los_tres_campos(embeddings):

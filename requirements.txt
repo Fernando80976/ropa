@@ -1,12 +1,19 @@
-# Dependencias directas, con version fijada.
+# Dependencias de ejecucion, con version fijada.
 #
-# Solo estan las que el proyecto importa; el resto (torch, transformers,
-# numpy...) las arrastra sentence-transformers y no se fijan aqui a proposito:
-# fijar dependencias transitivas obliga a actualizarlas a mano cada vez.
+# Aqui NO estan torch ni sentence-transformers a proposito. El modelo se
+# ejecuta en su version ONNX cuantizada (ver embeddings.py), y eso cambia el
+# peso de la instalacion de forma decisiva:
 #
-# torch es la excepcion: se pide la variante de CPU explicitamente porque la
-# de GPU ocupa ~2,5 GB y en un servidor sin tarjeta grafica no sirve de nada.
---extra-index-url https://download.pytorch.org/whl/cpu
+#     torch                 490 MB
+#     onnxruntime            50 MB
+#
+# Con torch, el proyecto no entra en los 512 MB de RAM de un plan gratuito de
+# hosting. Sin el, sobra sitio. sentence-transformers tampoco vale como
+# atajo: aunque sepa cargar modelos ONNX, importa torch igualmente.
+#
+# Para reexportar el modelo hace falta sentence-transformers y
+# optimum[onnxruntime], que son dependencias de desarrollo y estan fuera de
+# este fichero: en el servidor no se exporta nada.
 
 # API y front
 fastapi==0.141.1
@@ -16,9 +23,13 @@ jinja2==3.1.6
 # Base de datos
 sqlite-vec==0.1.9
 
-# Embeddings
-sentence-transformers==5.7.0
-torch==2.13.0
+# Embeddings: ejecucion del modelo, tokenizador y algebra del pooling.
+onnxruntime==1.30.0
+tokenizers==0.22.2
+numpy==2.5.2
+
+# Barra de progreso del indexado.
+tqdm==4.70.0
 
 # LLM
 groq==1.6.0
@@ -26,7 +37,3 @@ groq==1.6.0
 # Contrato y configuracion
 pydantic==2.13.4
 python-dotenv==1.2.2
-
-# Ingest. Solo lo usa ingest.py, que es un script de un solo uso: en el
-# servidor no hace falta, pero se deja para poder reconstruir la BD alli.
-pandas==3.0.5

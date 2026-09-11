@@ -1,0 +1,30 @@
+# Blueprint de Render: describe el servicio para no configurarlo a mano en su
+# panel. En Render se lee desde New > Blueprint apuntando a este repositorio.
+#
+# Se eligio Render y no Hugging Face Spaces porque Spaces dejo de ofrecer plan
+# gratuito para Docker (solo los Static Spaces son gratis, y esos no ejecutan
+# Python). El plan gratuito de Render son 512 MB de RAM, donde el proyecto
+# entra solo gracias al modelo cuantizado: con torch no cabria.
+
+services:
+  - type: web
+    name: buscador-ropa
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    region: frankfurt
+
+    envVars:
+      # sync: false significa que Render la pide al crear el servicio y la
+      # guarda en su gestor de secretos. La clave no entra en el repositorio.
+      - key: GROQ_API_KEY
+        sync: false
+
+      # Misma ruta que fija el Dockerfile. Se repite aqui porque el valor del
+      # blueprint tiene prioridad sobre el ENV de la imagen.
+      - key: DB_PATH
+        value: /home/usuario/app/ropa.db
+
+    # La raiz sirve la pagina y no consulta al LLM, asi que vale como sonda
+    # de salud sin gastar cuota de Groq en cada comprobacion.
+    healthCheckPath: /

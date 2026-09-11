@@ -5,3 +5,8 @@ articles.csv
 __pycache__/
 # Modelo de sentence-transformers descargado por HuggingFace
 .cache/
+
+# Modelo de embeddings: 113 MB. Lo descarga preparar_modelo.py.
+modelo_onnx/
+# Referencia para comparar fp32 con int8, se regenera.
+referencia_fp32.json
