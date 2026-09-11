@@ -18,16 +18,18 @@ from models import SearchFilters
 # Columnas que se devuelven al front. article_id no esta aqui porque lo anade
 # el SELECT como min(article_id); es la que forma la URL de la imagen en el
 # catalogo de H&M, asi que tiene que salir si o si.
+# Van cualificadas con "a." porque la busqueda semantica hace JOIN contra
+# vec_productos, que tambien tiene una columna product_code.
 COLUMNAS_RESULTADO = """
-    product_code,
-    prod_name,
-    product_type_name,
-    product_group_name,
-    index_group_name,
-    perceived_colour_master_name,
-    perceived_colour_value_name,
-    graphical_appearance_name,
-    detail_desc
+    a.product_code,
+    a.prod_name,
+    a.product_type_name,
+    a.product_group_name,
+    a.index_group_name,
+    a.perceived_colour_master_name,
+    a.perceived_colour_value_name,
+    a.graphical_appearance_name,
+    a.detail_desc
 """
 
 
@@ -98,12 +100,12 @@ def buscar_por_filtros(
     # min(), prod_name y el color vendrian de una fila arbitraria del grupo y
     # podrian no corresponderse entre si.
     consulta = f"""
-        SELECT min(article_id) AS article_id, {COLUMNAS_RESULTADO},
+        SELECT min(a.article_id) AS article_id, {COLUMNAS_RESULTADO},
                count(*) AS variantes
-        FROM articulos
+        FROM articulos a
         WHERE {where}
-        GROUP BY product_code
-        ORDER BY product_code
+        GROUP BY a.product_code
+        ORDER BY a.product_code
         LIMIT ?
     """
 
@@ -116,3 +118,51 @@ def contar_por_filtros(con: sqlite3.Connection, filtros: SearchFilters) -> int:
     where, parametros = construir_where(filtros)
     consulta = f"SELECT count(DISTINCT product_code) FROM articulos WHERE {where}"
     return con.execute(consulta, parametros).fetchone()[0]
+
+
+# ---------------------------------------------------------------------------
+# Capa semantica (etapa 4)
+# ---------------------------------------------------------------------------
+
+def buscar_semantica(
+    con: sqlite3.Connection,
+    texto: str,
+    limite: int = 24,
+) -> list[dict]:
+    """
+    Productos mas parecidos al texto, sin aplicar ningun filtro duro.
+
+    Devuelve los datos del producto mas su `distancia` (menor = mas parecido).
+    Solo se usa suelta para depurar: la busqueda real la hace `buscar()`,
+    que primero filtra y luego ordena lo que sobrevive.
+    """
+    # Import diferido: cargar embeddings.py arrastra el modelo de 450 MB, y
+    # buscar_por_filtros tiene que poder usarse sin pagar eso.
+    from embeddings import embeder_consulta
+
+    # MATCH + k = ... es la sintaxis de KNN de sqlite-vec: recorre el indice
+    # vectorial, no la tabla entera.
+    #
+    # El KNN va aislado en un CTE porque vec0 solo admite consultas muy
+    # simples: exige un "ORDER BY distance" a secas y no tolera JOIN ni
+    # GROUP BY en la misma consulta. Se sacan primero los k vecinos y se
+    # adorna despues.
+    filas = con.execute(
+        f"""
+        WITH vecinos AS (
+            SELECT product_code, distance
+            FROM vec_productos
+            WHERE embedding MATCH ? AND k = ?
+            ORDER BY distance
+        )
+        SELECT v.distance AS distancia, min(a.article_id) AS article_id,
+               {COLUMNAS_RESULTADO}, count(*) AS variantes
+        FROM vecinos v
+        JOIN articulos a ON a.product_code = v.product_code
+        GROUP BY a.product_code
+        ORDER BY v.distance
+        """,
+        (embeder_consulta(texto), limite),
+    ).fetchall()
+
+    return [dict(fila) for fila in filas]
