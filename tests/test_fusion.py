@@ -66,7 +66,7 @@ def extrae(monkeypatch):
     def _extrae(**campos):
         import extractor
 
-        campos.setdefault("consulta_semantica", "una prenda")
+        campos.setdefault("consulta_semantica", "a garment")
         monkeypatch.setattr(
             extractor, "extraer_filtros", lambda frase: SearchFilters(**campos)
         )
@@ -89,7 +89,7 @@ def test_el_filtro_manda_sobre_la_semantica(con, extrae):
     El abrigo no puede aparecer: si apareciera, el filtro seria una sugerencia
     y no un filtro, que es justo lo que se quiere evitar.
     """
-    extrae(publico="Baby/Children", consulta_semantica="abrigo de invierno")
+    extrae(publico="Baby/Children", consulta_semantica="winter coat")
     respuesta = buscar(con, "abrigo de invierno para nino")
 
     assert [r["product_code"] for r in respuesta["resultados"]] == [300]
@@ -97,7 +97,7 @@ def test_el_filtro_manda_sobre_la_semantica(con, extrae):
 
 def test_la_semantica_ordena_lo_que_sobrevive(con, extrae):
     """Sin filtros, el orden lo decide la distancia."""
-    extrae(consulta_semantica="algo abrigado para el invierno")
+    extrae(consulta_semantica="something warm for winter")
     resultados = buscar(con, "algo abrigado para el invierno")["resultados"]
 
     assert resultados[0]["product_code"] == 100
@@ -107,7 +107,7 @@ def test_la_semantica_ordena_lo_que_sobrevive(con, extrae):
 
 def test_devuelve_los_tres_bloques_de_informacion(con, extrae):
     """El front necesita los tres para explicar por que sale lo que sale."""
-    extrae(publico="Ladieswear", consulta_semantica="vestido")
+    extrae(publico="Ladieswear", consulta_semantica="dress")
     respuesta = buscar(con, "un vestido")
 
     assert set(respuesta) == {
@@ -118,7 +118,7 @@ def test_devuelve_los_tres_bloques_de_informacion(con, extrae):
 
 
 def test_respeta_el_limite(con, extrae):
-    extrae(consulta_semantica="ropa")
+    extrae(consulta_semantica="clothes")
     assert len(buscar(con, "ropa", limite=2)["resultados"]) == 2
 
 
@@ -190,7 +190,7 @@ def test_los_colores_excluidos_no_se_relajan_nunca(con):
 def test_la_busqueda_avisa_de_lo_que_relajo(con, extrae):
     """Un buscador que amplia la busqueda en silencio esta mintiendo."""
     extrae(publico="Menswear", estampado="Sequin",
-           consulta_semantica="chaqueta de lentejuelas")
+           consulta_semantica="sequin jacket")
     respuesta = buscar(con, "chaqueta de lentejuelas de hombre")
 
     assert respuesta["filtros_relajados"] == ["estampado"]
@@ -208,7 +208,7 @@ def test_una_consulta_imposible_acaba_devolviendo_algo(con, extrae):
     """
     extrae(publico="Sport", categoria="Swimwear", colores=["Metal"],
            tono="Medium Dusty", estampado="Lace",
-           consulta_semantica="banador metalico de encaje")
+           consulta_semantica="metallic lace swimsuit")
     respuesta = buscar(con, "banador metalico de encaje deportivo")
 
     assert respuesta["total"] > 0

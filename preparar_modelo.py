@@ -6,9 +6,8 @@ Descarga el modelo de embeddings a `modelo_onnx/`.
 Lo usan tanto el equipo de desarrollo como el Dockerfile, para que los dos
 partan exactamente del mismo fichero.
 
-Por que no esta el modelo en el repositorio: son 113 MB, y Hugging Face ya lo
-publica. Meterlo en git obligaria a usar Git LFS, que en el plan gratuito de
-GitHub trae 1 GB de transferencia al mes y cada despliegue se come una parte.
+Por que no esta el modelo en el repositorio: Hugging Face ya lo publica, y
+duplicarlo en git no aporta nada.
 
 Por que no se descarga en el arranque de la app: un servidor que baja 113 MB
 cada vez que se reinicia tarda demasiado en responder la primera consulta.
@@ -18,12 +17,12 @@ Aqui se baja una vez, durante el build de la imagen, y queda dentro.
 import urllib.request
 from pathlib import Path
 
-REPO = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+REPO = "sentence-transformers/all-MiniLM-L6-v2"
 
 # Revision fijada, no "main": si el repo de origen publicase otro fichero con
 # el mismo nombre, los vectores dejarian de corresponderse con los que ya
 # estan indexados en la BD y el ranking se volveria ruido, sin ningun error.
-REVISION = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
 
 DESTINO = Path(__file__).parent / "modelo_onnx"
 

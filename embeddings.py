@@ -6,42 +6,50 @@ una vez por variante de color (104.828 filas dan 46.922 productos), y las
 variantes comparten prod_name y detail_desc. Embeber por fila seria calcular
 varias veces el mismo vector.
 
+Por que un modelo solo-ingles
+-----------------------------
+El catalogo esta en ingles y el usuario escribe en espanol, asi que lo obvio
+seria un modelo multilingue. No lo es, porque el LLM del extractor YA esta
+reescribiendo la frase: pedirle que la devuelva en ingles no le cuesta nada
+(ver models.py) y convierte el problema en comparar ingles contra ingles, que
+esta mejor planteado que cruzar dos idiomas.
+
+Lo que se gana midiendo la memoria de los dos, con el mismo codigo:
+
+                            multilingue    solo-ingles
+    modelo (MiniLM)         L12, 250k      L6, 30k vocab
+    tokenizador en RAM        262 MB           8 MB
+    sesion ONNX               140 MB          36 MB
+    total con el interprete   451 MB          99 MB
+
+El tokenizador es la sorpresa: pesa mas que el modelo, y no por el fichero
+(8,7 MB en disco) sino por construir en memoria un vocabulario de 250.002
+tokens. Es lo que hacia que el servicio no cupiera en los 512 MB de un plan
+gratuito y muriera en el arranque con "Out of memory".
+
 Por que onnxruntime y no sentence-transformers
 ----------------------------------------------
-El modelo es el mismo (paraphrase-multilingual-MiniLM-L12-v2), pero aqui se
-ejecuta su version ONNX cuantizada a int8 en lugar de la de PyTorch:
+El modelo se ejecuta en su version ONNX cuantizada a int8 en vez de la de
+PyTorch, porque torch son 490 MB de libreria por si solo. sentence-transformers
+tampoco vale como atajo: aunque sabe cargar modelos ONNX, importa torch
+igualmente.
 
-    modelo            torch fp32   ->  onnx int8
-    peso en disco       470 MB     ->   113 MB
-    libreria            torch          onnxruntime
-    peso libreria       490 MB     ->    50 MB
+A cambio hay que escribir a mano las dos operaciones que hacia por su cuenta,
+que son pocas lineas y estan abajo: media de los tokens ponderada por la
+mascara, y normalizado L2.
 
-El motivo no es la velocidad, es que quepa: los planes gratuitos de hosting
-dan 512 MB de RAM y con torch no entra.
-
-La cuantizacion no sale gratis, y conviene saber exactamente que se pierde.
-Medido sobre el catalogo completo (46.922 productos) con diez consultas en
-espanol, comparando contra el mismo indice calculado en fp32:
-
-    coseno entre el vector int8 y el fp32     0,988 en el peor caso
-    el resultado top-1 de fp32 sigue saliendo 10 de 10 veces en el top-10
-    los 5 mejores de fp32 siguen saliendo     94% de las veces en el top-20
-    el orden exacto coincide                  solo 6 de 10 veces en el top-1
-
-O sea: el ranking SI se reordena, pero no se pierden resultados buenos. Tiene
-sentido en este catalogo, donde hay miles de prendas casi identicas ("camiseta
-basica de algodon" tiene cientos de candidatas validas) y una perturbacion
-minima basta para intercambiar casi-empates. Lo que importa es que los
-resultados relevantes siguen estando, no en que posicion exacta.
-
-A cambio hay que escribir a mano las dos operaciones que sentence-transformers
-hacia por su cuenta, que son pocas lineas y estan abajo: media de los tokens
-ponderada por la mascara, y normalizado L2.
+La cuantizacion a int8 tampoco sale gratis. Medido sobre el catalogo completo
+con el modelo multilingue, comparando contra el mismo indice en fp32: el
+coseno era 0,988 en el peor caso, el mejor resultado de fp32 seguia saliendo
+en el top-10 en las diez consultas de prueba, pero el orden exacto solo
+coincidia 6 de 10 veces. O sea: el ranking se reordena y no se pierden
+resultados buenos, que en un catalogo con miles de prendas casi identicas es
+lo esperable.
 
 El modelo vive en `modelo_onnx/`, que no esta en el repositorio: lo baja
 `preparar_modelo.py`, una vez en desarrollo y otra durante el build de la
-imagen. En el arranque no se descarga nada, porque un servidor que baja
-113 MB en cada reinicio tarda demasiado en responder la primera consulta.
+imagen. En el arranque no se descarga nada, porque un servidor que se baja el
+modelo en cada reinicio tarda demasiado en responder la primera consulta.
 """
 
 import sqlite3
@@ -57,10 +65,10 @@ from db import DIMENSIONES
 
 DIRECTORIO_MODELO = Path(__file__).parent / "modelo_onnx"
 
-# 128 es el max_seq_length con el que se entreno el modelo (viene en su
+# 256 es el max_seq_length con el que se entreno el modelo (viene en su
 # sentence_bert_config.json). Subirlo no aporta: el modelo no aprendio
 # posiciones mas alla de ahi.
-TOKENS_MAXIMOS = 128
+TOKENS_MAXIMOS = 256
 
 # Textos por lote. 64 va bien en CPU; subirlo mucho no acelera y dispara la
 # memoria, que es justo lo que se esta intentando ahorrar.

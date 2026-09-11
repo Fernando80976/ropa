@@ -1,10 +1,14 @@
 """
 Tests de la capa semantica.
 
-Cargan el modelo de verdad (no se puede mockear lo unico que se quiere
-comprobar: que un texto en espanol cae cerca de una descripcion en ingles),
-asi que son los tests lentos de la suite. El modelo se carga una sola vez
-para todos gracias a que vive a nivel de modulo en embeddings.py.
+Cargan el modelo de verdad, porque lo unico que se quiere comprobar (que una
+descripcion de prenda cae cerca de la prenda correcta) es justo lo que no se
+puede mockear. El modelo se carga una sola vez para todos gracias a que vive
+a nivel de modulo en embeddings.py.
+
+Las consultas van en ingles: el modelo es solo-ingles, y quien traduce del
+espanol es el LLM del extractor (ver models.py). La parte de "entender
+espanol" se prueba en tests/test_extractor.py, no aqui.
 
 Incluyen la comprobacion que justifica la cuantizacion a int8: que el orden
 de los resultados no cambia respecto al modelo original en fp32.
@@ -66,7 +70,7 @@ def con(embeddings):
 
 def test_el_modelo_tiene_las_dimensiones_de_la_tabla(embeddings):
     """Si no coinciden, el INSERT en vec_productos falla."""
-    vector = embeddings.vectorizar(["una camiseta azul"])
+    vector = embeddings.vectorizar(["a blue t-shirt"])
     assert vector.shape == (1, db.DIMENSIONES)
 
 
@@ -77,7 +81,7 @@ def test_los_vectores_salen_normalizados(embeddings):
     """
     import numpy as np
 
-    vectores = embeddings.vectorizar(["abrigo de invierno", "camiseta"])
+    vectores = embeddings.vectorizar(["winter coat", "t-shirt"])
     normas = np.linalg.norm(vectores, axis=1)
     assert np.allclose(normas, 1.0, atol=1e-5)
 
@@ -87,8 +91,8 @@ def test_vectorizar_es_determinista(embeddings):
     import numpy as np
 
     assert np.allclose(
-        embeddings.vectorizar(["camiseta"]),
-        embeddings.vectorizar(["camiseta"]),
+        embeddings.vectorizar(["t-shirt"]),
+        embeddings.vectorizar(["t-shirt"]),
         atol=1e-9,
     )
 
@@ -110,9 +114,9 @@ def test_el_lote_afecta_poco_al_vector(embeddings):
     resultado del modelo fp32 sigue apareciendo en el top-10 en las diez
     consultas de prueba.
     """
-    sola = embeddings.vectorizar(["camiseta"])[0]
+    sola = embeddings.vectorizar(["t-shirt"])[0]
     en_lote = embeddings.vectorizar(
-        ["camiseta", "un abrigo largo de lana muy abrigado para el invierno frio"]
+        ["t-shirt", "a long warm wool coat for very cold winter days"]
     )[0]
     assert float(sola @ en_lote) > 0.98
 
@@ -145,17 +149,15 @@ def test_indexar_no_repite_trabajo(con, embeddings):
 
 
 @pytest.mark.parametrize("consulta, esperado", [
-    ("algo abrigado para el invierno", 100),
-    ("una camiseta fresca de verano", 200),
-    ("zapatillas para correr", 300),
-    ("un vestido elegante para una boda", 400),
+    ("something warm for winter", 100),
+    ("a light summer top", 200),
+    ("running shoes", 300),
+    ("an elegant dress for a wedding", 400),
 ])
-def test_consultas_en_espanol_encuentran_descripciones_en_ingles(
-    con, consulta, esperado
-):
+def test_la_consulta_encuentra_la_prenda_adecuada(con, consulta, esperado):
     """
-    El nucleo de la etapa: el catalogo esta en ingles y el usuario escribe en
-    espanol. Si esto falla, el modelo elegido no sirve para el proyecto.
+    El nucleo de la capa: describir una prenda con otras palabras tiene que
+    devolver esa prenda. Si esto falla, el modelo elegido no sirve.
     """
     from buscador import buscar_semantica
 
@@ -166,6 +168,6 @@ def test_consultas_en_espanol_encuentran_descripciones_en_ingles(
 def test_buscar_semantica_devuelve_la_distancia(con):
     from buscador import buscar_semantica
 
-    resultados = buscar_semantica(con, "abrigo de invierno", limite=4)
+    resultados = buscar_semantica(con, "winter coat", limite=4)
     distancias = [r["distancia"] for r in resultados]
     assert distancias == sorted(distancias)

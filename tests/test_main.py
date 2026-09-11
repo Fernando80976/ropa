@@ -26,7 +26,7 @@ def extrae(monkeypatch):
     def _extrae(**campos):
         import extractor
 
-        campos.setdefault("consulta_semantica", "una prenda")
+        campos.setdefault("consulta_semantica", "a garment")
         monkeypatch.setattr(
             extractor, "extraer_filtros", lambda frase: SearchFilters(**campos)
         )
@@ -72,7 +72,7 @@ def test_la_pagina_trae_htmx_y_la_hoja_de_estilos(cliente):
 
 def test_el_fragmento_no_es_una_pagina_entera(cliente, extrae):
     """HTMX lo inserta dentro del DOM: si trae <html> queda anidado."""
-    extrae(consulta_semantica="un vestido")
+    extrae(consulta_semantica="a dress")
     texto = cliente.get("/buscar/html", params={"q": "un vestido", "limite": 3}).text
 
     assert "<html" not in texto.lower()
@@ -81,7 +81,7 @@ def test_el_fragmento_no_es_una_pagina_entera(cliente, extrae):
 
 def test_el_fragmento_ensena_el_json_del_modelo(cliente, extrae):
     """El panel de filtros es lo que hace explicable la demo."""
-    extrae(publico="Menswear", colores=["Blue"], consulta_semantica="camiseta")
+    extrae(publico="Menswear", colores=["Blue"], consulta_semantica="t-shirt")
     texto = cliente.get("/buscar/html", params={"q": "camiseta azul de hombre"}).text
 
     assert "Lo que entendio el modelo" in texto
@@ -92,7 +92,7 @@ def test_el_fragmento_ensena_el_json_del_modelo(cliente, extrae):
 def test_el_fragmento_avisa_si_se_relajo_algo(cliente, extrae):
     """Ampliar la busqueda en silencio es mentirle al usuario."""
     extrae(publico="Menswear", categoria="Swimwear", colores=["Metal"],
-           estampado="Lace", consulta_semantica="banador")
+           estampado="Lace", consulta_semantica="swimsuit")
     texto = cliente.get("/buscar/html", params={"q": "banador metalico de encaje"}).text
 
     assert "Se amplio la busqueda" in texto
@@ -100,7 +100,7 @@ def test_el_fragmento_avisa_si_se_relajo_algo(cliente, extrae):
 
 
 def test_el_fragmento_no_avisa_si_no_relajo_nada(cliente, extrae):
-    extrae(publico="Menswear", consulta_semantica="camiseta")
+    extrae(publico="Menswear", consulta_semantica="t-shirt")
     texto = cliente.get("/buscar/html", params={"q": "camiseta de hombre"}).text
 
     assert "Se amplio la busqueda" not in texto
@@ -119,7 +119,7 @@ def test_el_html_se_escapa(cliente, extrae):
 # ---------------------------------------------------------------------------
 
 def test_buscar_devuelve_json(cliente, extrae):
-    extrae(publico="Menswear", consulta_semantica="camiseta")
+    extrae(publico="Menswear", consulta_semantica="t-shirt")
     datos = cliente.get("/buscar", params={"q": "camiseta de hombre"}).json()
 
     assert datos["frase"] == "camiseta de hombre"

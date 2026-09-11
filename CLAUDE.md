@@ -32,7 +32,7 @@ Consecuencias directas:
 | API | FastAPI + uvicorn | tipado, `/docs` gratis |
 | BD | SQLite + extensión `sqlite-vec` | cero instalación; Docker no era viable en este equipo |
 | Acceso a datos | módulo `sqlite3` de la stdlib, SQL a mano | sin ORM: el SQL es parte de lo que se quiere demostrar |
-| Embeddings | `sentence-transformers`, modelo **multilingüe** | las descripciones están en inglés, las consultas en español |
+| Embeddings | `onnxruntime` + `tokenizers`, modelo **solo inglés** (`all-MiniLM-L6-v2`, int8) | el catálogo está en inglés y el LLM ya traduce la consulta; cabe en 512 MB de RAM |
 | LLM | Groq (SDK compatible con OpenAI) | capa gratuita, latencia baja, JSON estructurado |
 | Front | Jinja2 + HTMX | sin build step, sin node_modules |
 | Tests | pytest | |
@@ -47,12 +47,16 @@ buscador-ropa/
   models.py        # SearchFilters: el contrato LLM <-> BD. LEER SIEMPRE ANTES DE TOCAR NADA
   db.py            # conexión, carga de sqlite-vec, creación de esquema
   ingest.py        # articles.csv -> SQLite (script de un solo uso)
-  embeddings.py    # cálculo y almacenamiento de vectores
+  embeddings.py    # cálculo y almacenamiento de vectores (onnxruntime, sin torch)
   extractor.py     # frase -> SearchFilters vía Groq
   buscador.py      # fusión: filtros SQL + ranking semántico
   main.py          # app FastAPI y rutas
+  preparar_modelo.py  # descarga el modelo de embeddings (no va en git)
+  preparar_datos.py   # descarga ropa.db ya indexada (no va en git)
   templates/       # Jinja2
+  static/          # hoja de estilos propia
   tests/
+  modelo_onnx/     # NO versionado, lo crea preparar_modelo.py
   articles.csv     # NO versionado
   ropa.db          # NO versionado
   .env             # NO versionado
@@ -89,6 +93,28 @@ las contradigas:
    porque acaban en el JSON Schema que ve el LLM.
 4. Todo lo que el LLM no consigue estructurar va al campo
    `consulta_semantica`, que nunca puede quedar vacío.
+5. **`consulta_semantica` se pide en inglés**, aunque el usuario escriba en
+   español, y el modelo de embeddings es solo inglés. Parece al revés de lo
+   razonable, así que conviene saber por qué:
+
+   - El LLM ya está reescribiendo la frase. Pedirle que además la traduzca no
+     añade ni una llamada ni latencia apreciable.
+   - Así se compara inglés contra inglés (`detail_desc` lo está) en vez de
+     cruzar dos idiomas, que es un problema peor planteado.
+   - Y sobre todo: un modelo multilingüe necesita un vocabulario de 250.002
+     tokens, y **el tokenizador solo ocupa 262 MB en RAM**, más que el propio
+     modelo. Medido: 451 MB el multilingüe frente a 99 MB el inglés. Es la
+     diferencia entre caber o no caber en un servidor gratuito de 512 MB —
+     el primer despliegue murió justo ahí, con "Out of memory".
+
+   El precio está documentado en `models.py`: si Groq no responde, el fallback
+   manda la frase en español a un modelo que solo entiende inglés. Se acepta
+   porque ese camino ya era el peor (se queda sin ningún filtro duro).
+6. El modelo no se versiona ni se descarga al arrancar: lo baja
+   `preparar_modelo.py` con **la revisión fijada por hash**, no por `main`. Si
+   el repositorio de origen publicase otro fichero con el mismo nombre, los
+   vectores dejarían de corresponderse con los indexados y el ranking se
+   volvería ruido **sin dar ningún error**.
 
 ## Cómo tratar la salida del LLM
 
@@ -108,8 +134,19 @@ respuesta del modelo:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1        # SIEMPRE, en cada terminal nueva
+python preparar_modelo.py           # una vez: baja el modelo a modelo_onnx/
+python preparar_datos.py            # una vez: baja ropa.db ya indexada
 uvicorn main:app --reload
-pytest -q
+pytest -q                           # los tests de integración van aparte:
+pytest -q -m integracion            #   llaman a Groq de verdad
+```
+
+Si se cambia de modelo de embeddings hay que **reindexar entero**, porque los
+vectores de dos modelos distintos no comparten espacio vectorial y mezclarlos
+da un ranking sin sentido, sin ningún error visible:
+
+```powershell
+python embeddings.py --recalcular
 ```
 
 ## Cosas que no hacer

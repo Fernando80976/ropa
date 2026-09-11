@@ -8,6 +8,14 @@ Regla de diseño: un campo solo es filtro duro si sus valores son POCOS,
 ORTOGONALES entre si y NO AMBIGUOS. Todo lo demas (estilo, ocasion, corte,
 tipo concreto de prenda) va a `consulta_semantica` y se resuelve por embeddings.
 
+`consulta_semantica` se pide EN INGLES aunque el usuario escriba en espanol.
+El LLM ya esta reescribiendo la frase, asi que traducirla no le cuesta nada, y
+a cambio el buscador compara ingles contra ingles (las descripciones del
+catalogo lo estan) en vez de cruzar dos idiomas. Eso permite usar un modelo de
+embeddings solo-ingles, que ademas de ser mejor en su idioma ocupa 99 MB en
+memoria frente a los 451 MB del multilingue equivalente: la diferencia entre
+caber o no caber en un servidor gratuito.
+
 Los valores de los Literal son los del dataset (en ingles) porque son los que
 estan literalmente en la BD. Las descripciones estan en espanol porque acaban
 en el JSON Schema que se le pasa al modelo, y ahi si importa el idioma del
@@ -142,12 +150,13 @@ class SearchFilters(BaseModel):
     consulta_semantica: str = Field(
         description=(
             "TODO lo que no ha entrado en los campos anteriores, reescrito "
-            "como una descripcion breve de la prenda: tipo concreto, corte, "
-            "ocasion, tejido, estilo. Ejemplo: para 'chaqueta vaquera "
-            "oversize para una boda en verano que no sea negra', aqui iria "
-            "'chaqueta oversize ligera para evento'. Nunca lo dejes vacio: "
-            "si la consulta era puramente de filtros, repite aqui el tipo "
-            "de prenda."
+            "como una descripcion breve de la prenda EN INGLES: tipo "
+            "concreto, corte, ocasion, tejido, estilo. Ejemplo: para "
+            "'chaqueta vaquera oversize para una boda en verano que no sea "
+            "negra', aqui iria 'oversized lightweight jacket for an event'. "
+            "Escribelo siempre en ingles aunque la consulta venga en espanol. "
+            "Nunca lo dejes vacio: si la consulta era puramente de filtros, "
+            "repite aqui el tipo de prenda."
         ),
     )
 
@@ -175,3 +184,10 @@ class SearchFilters(BaseModel):
 #
 # 5. No hay precio en articles.csv. Vive en transactions_train.csv como precio
 #    por transaccion y normalizado. Queda fuera de la v1.
+
+#
+# 6. El coste de pedir consulta_semantica en ingles es que el camino de
+#    emergencia empeora: si Groq no responde, extractor.py cae al fallback y
+#    manda la frase del usuario en espanol a un modelo que solo entiende
+#    ingles. Se acepta porque ese camino ya era el peor (se queda sin ningun
+#    filtro duro) y sigue devolviendo algo en vez de nada.

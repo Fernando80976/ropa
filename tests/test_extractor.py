@@ -78,6 +78,15 @@ def test_el_system_prompt_no_repite_los_enums():
     assert "Garment Upper body" not in extractor.SISTEMA
 
 
+def test_el_system_prompt_pide_la_consulta_semantica_en_ingles():
+    """
+    El modelo de embeddings es solo-ingles: quien traduce es el LLM. Si esta
+    instruccion desaparece del prompt, la busqueda semantica se degrada sin
+    dar ningun error.
+    """
+    assert "INGLES" in extractor.SISTEMA
+
+
 # ---------------------------------------------------------------------------
 # Las seis frases de ejemplo
 # ---------------------------------------------------------------------------
@@ -281,3 +290,6 @@ def test_integracion_groq_devuelve_filtros_sensatos():
     assert "Red" in filtros.colores
     assert filtros.categoria == "Garment Full body"
     assert filtros.consulta_semantica.strip()
+
+    # Traducido al ingles, que es lo que espera el modelo de embeddings.
+    assert "dress" in filtros.consulta_semantica.lower()

@@ -76,7 +76,8 @@ Reglas:
 - consulta_semantica NUNCA puede ir vacia. Ahi va todo lo que no ha entrado en
   los otros campos (tipo de prenda, corte, ocasion, tejido, estilo). Si la
   frase era solo filtros, repite ahi el tipo de prenda.
-- No traduzcas consulta_semantica: dejala en espanol."""
+- consulta_semantica va SIEMPRE EN INGLES, aunque el usuario escriba en
+  espanol. Se compara contra descripciones de producto en ingles."""
 
 
 def _mensajes(frase: str) -> list[dict]:
@@ -150,7 +151,14 @@ def validar_degradando(datos: dict, frase: str) -> SearchFilters:
 
 
 def _fallback(frase: str) -> SearchFilters:
-    """Sin filtros duros: la busqueda queda en puramente semantica."""
+    """
+    Sin filtros duros: la busqueda queda en puramente semantica.
+
+    Ademas la frase va en espanol a un modelo de embeddings que solo entiende
+    ingles, asi que este camino es peor desde que consulta_semantica se pide
+    traducida. Se asume: ya era el peor de los tres (sin ningun filtro duro) y
+    devolver resultados aproximados sigue siendo mejor que devolver un error.
+    """
     log.error("Groq no devolvio nada usable. Se busca solo por semantica.")
     return SearchFilters(consulta_semantica=frase)
 
