@@ -1,10 +1,8 @@
 .venv/
 .env
-# ropa.db SI se versiona (via Git LFS, ver .gitattributes): es la unica forma
-# de que el servidor tenga el catalogo indexado sin reconstruirlo en cada
-# despliegue. Es una excepcion a la regla de CLAUDE.md, tomada al desplegar.
-# Las BD de usar y tirar que se creen al lado si se ignoran.
-ropa_*.db
+# La BD no se versiona (regla de CLAUDE.md): es un artefacto reconstruible.
+# Para el despliegue la baja preparar_datos.py de un dataset de Hugging Face.
+*.db
 *.db-journal
 *.db-wal
 articles.csv

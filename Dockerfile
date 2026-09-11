@@ -27,13 +27,14 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 
 ENV PATH=/home/usuario/.local/bin:$PATH
 
-# El modelo se baja durante el build y queda dentro de la imagen. No esta en
-# el repositorio (son 113 MB y Hugging Face ya lo publica) ni se descarga en
-# el arranque, que haria lenta la primera consulta tras cada reinicio.
-COPY --chown=usuario preparar_modelo.py .
-RUN python preparar_modelo.py
+# El modelo (113 MB) y la BD indexada (106 MB) se bajan durante el build y
+# quedan dentro de la imagen. Ninguno esta en el repositorio, y ninguno se
+# descarga en el arranque: un servidor que baja 220 MB en cada reinicio tarda
+# demasiado en responder la primera consulta.
+COPY --chown=usuario preparar_modelo.py preparar_datos.py ./
+RUN python preparar_modelo.py && python preparar_datos.py
 
-# El codigo y la BD ya indexada (ropa.db).
+# El codigo.
 COPY --chown=usuario . .
 
 # PORT lo inyectan Render, Koyeb y Cloud Run; 7860 es el que espera Hugging
