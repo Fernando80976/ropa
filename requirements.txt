@@ -1,0 +1,32 @@
+# Dependencias directas, con version fijada.
+#
+# Solo estan las que el proyecto importa; el resto (torch, transformers,
+# numpy...) las arrastra sentence-transformers y no se fijan aqui a proposito:
+# fijar dependencias transitivas obliga a actualizarlas a mano cada vez.
+#
+# torch es la excepcion: se pide la variante de CPU explicitamente porque la
+# de GPU ocupa ~2,5 GB y en un servidor sin tarjeta grafica no sirve de nada.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# API y front
+fastapi==0.141.1
+uvicorn==0.52.1
+jinja2==3.1.6
+
+# Base de datos
+sqlite-vec==0.1.9
+
+# Embeddings
+sentence-transformers==5.7.0
+torch==2.13.0
+
+# LLM
+groq==1.6.0
+
+# Contrato y configuracion
+pydantic==2.13.4
+python-dotenv==1.2.2
+
+# Ingest. Solo lo usa ingest.py, que es un script de un solo uso: en el
+# servidor no hace falta, pero se deja para poder reconstruir la BD alli.
+pandas==3.0.5

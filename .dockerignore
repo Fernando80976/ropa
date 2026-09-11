@@ -1,0 +1,22 @@
+# Lo que NO debe entrar en la imagen.
+#
+# .env es el importante: aunque esta en .gitignore y por tanto no llega al
+# repo del Space, el COPY del Dockerfile copia el contexto entero. En el
+# servidor la API key llega como secreto del Space, nunca como fichero.
+.env
+
+# Pesados e inutiles dentro del contenedor.
+.venv/
+articles.csv
+.git/
+__pycache__/
+*.pyc
+
+# Los tests no se ejecutan en el servidor.
+tests/
+pytest.ini
+conftest.py
+
+# Scripts de exploracion local.
+explora.py
+columnas.txt
