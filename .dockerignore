@@ -12,6 +12,12 @@ articles.csv
 __pycache__/
 *.pyc
 
+# El modelo y la BD los bajan preparar_modelo.py y preparar_datos.py durante
+# el build. Si estuvieran en el contexto, el COPY posterior los machacaria con
+# la copia local, que en un equipo de desarrollo puede estar desactualizada.
+modelo_onnx/
+*.db
+
 # Los tests no se ejecutan en el servidor.
 tests/
 pytest.ini
