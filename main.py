@@ -1,20 +1,31 @@
 """
 App FastAPI.
 
-De momento expone la busqueda estructurada tal cual: los filtros llegan como
-parametros de query y se validan contra SearchFilters, que es el mismo modelo
-que rellenara el LLM en la etapa 5. Probar la capa SQL sola, sin IA de por
-medio, es lo que permite saber luego si un resultado raro viene del modelo o
-de la consulta.
+Dos endpoints, y el segundo existe para depurar:
+
+    GET /buscar?q=...   la busqueda de verdad: LLM + filtros + semantica
+    GET /filtros?...    solo el WHERE, con los filtros puestos a mano
+
+Cuando una consulta devuelve algo raro, /filtros dice si el problema esta en
+el SQL o en lo que extrajo el modelo, que son las dos cosas que se pueden
+confundir cuando todo pasa por la misma ruta.
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Query
 
+from buscador import buscar, buscar_por_filtros
 from db import conectar, crear_esquema
 from models import Categoria, Color, Estampado, Publico, SearchFilters, Tono
-from buscador import buscar_por_filtros
+
+# Los logs del extractor (frase de entrada y filtros extraidos) son lo que
+# permite depurar el prompt con consultas reales, asi que se encienden aqui.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 
 @asynccontextmanager
@@ -49,9 +60,24 @@ def obtener_conexion():
         con.close()
 
 
-@app.get("/buscar", summary="Busqueda por filtros estructurados")
+@app.get("/buscar", summary="Busqueda por lenguaje natural")
 def endpoint_buscar(
+    q: str = Query(description="La frase del usuario, tal cual la escribe."),
+    limite: int = Query(default=24, ge=1, le=100),
     con=Depends(obtener_conexion),
+) -> dict:
+    """
+    Frase libre -> prendas.
+
+    Devuelve tambien los filtros que extrajo el LLM y los que hubo que
+    relajar. No es informacion de depuracion: es lo que le dice al usuario
+    por que esta viendo estos resultados.
+    """
+    return buscar(con, q, limite)
+
+
+@app.get("/filtros", summary="Solo filtros estructurados, sin LLM")
+def endpoint_filtros(
     publico: Publico | None = None,
     categoria: Categoria | None = None,
     colores: list[Color] = Query(default=[]),
@@ -59,13 +85,14 @@ def endpoint_buscar(
     tono: Tono | None = None,
     estampado: Estampado | None = None,
     limite: int = Query(default=24, ge=1, le=100),
+    con=Depends(obtener_conexion),
 ) -> dict:
     """
-    Aplica solo filtros duros. Todavia no hay busqueda semantica.
+    La capa SQL sola, sin IA ni embeddings de por medio.
 
-    Los tipos son los Literal de models.py, asi que /docs muestra cada campo
-    como un desplegable con los valores validos y FastAPI rechaza el resto
-    con un 422 sin que haya que escribir ninguna validacion.
+    Los tipos son los Literal de models.py, asi que /docs sale con un
+    desplegable por campo y los valores fuera del enum son un 422 sin
+    validacion escrita a mano.
     """
     filtros = SearchFilters(
         publico=publico,
@@ -74,8 +101,8 @@ def endpoint_buscar(
         colores_excluidos=colores_excluidos,
         tono=tono,
         estampado=estampado,
-        # Obligatorio en el modelo y aqui no se usa: esta etapa ignora la
-        # parte semantica. Se rellena en la etapa 6.
+        # Obligatoria en el modelo, y esta ruta no la usa: aqui no hay
+        # ranking semantico.
         consulta_semantica="",
     )
 

@@ -166,3 +166,109 @@ def buscar_semantica(
     ).fetchall()
 
     return [dict(fila) for fila in filas]
+
+
+# ---------------------------------------------------------------------------
+# Fusion: filtros duros + ranking semantico (etapa 6)
+# ---------------------------------------------------------------------------
+
+# Orden en que se van soltando los filtros cuando no hay resultados, del menos
+# al mas importante. La idea: quitar primero lo que el usuario mencionó de
+# pasada y dejar para el final lo que, si se ignora, convierte el resultado en
+# algo que no ha pedido.
+#
+#   estampado  suele ser un adorno ("de rayas"); sin el la prenda sigue valiendo
+#   tono       "azul oscuro" -> "azul" es una perdida pequena
+#   colores    ya es una peticion explicita, pero hay alternativas
+#   categoria  cambiar de zona del cuerpo ya es otra prenda
+#   publico    el ultimo: ensenar ropa de bebe a quien pidio de hombre es el
+#              peor fallo posible, y un tercio del catalogo es Baby/Children
+ORDEN_DE_RELAJADO = ["estampado", "tono", "colores", "categoria", "publico"]
+
+
+def _sin_campo(filtros: SearchFilters, campo: str) -> SearchFilters:
+    """Copia de los filtros con un campo vaciado."""
+    vacio = [] if campo == "colores" else None
+    return filtros.model_copy(update={campo: vacio})
+
+
+def relajar(
+    con: sqlite3.Connection,
+    filtros: SearchFilters,
+) -> tuple[SearchFilters, list[str]]:
+    """
+    Suelta filtros hasta que haya resultados. Devuelve los filtros y cuales cayeron.
+
+    `colores_excluidos` no se relaja nunca: es lo unico que el usuario ha
+    pedido en negativo ("que no sea negra"), y devolverle justo eso es peor
+    que no devolver nada.
+    """
+    relajados: list[str] = []
+
+    for campo in ORDEN_DE_RELAJADO:
+        if contar_por_filtros(con, filtros) > 0:
+            break
+
+        # Si el campo ya estaba vacio, soltarlo no cambia nada: no se anuncia
+        # al usuario un filtro que nunca aplicó.
+        if not getattr(filtros, campo):
+            continue
+
+        filtros = _sin_campo(filtros, campo)
+        relajados.append(campo)
+
+    return filtros, relajados
+
+
+def buscar(con: sqlite3.Connection, frase: str, limite: int = 24) -> dict:
+    """
+    Busqueda completa: frase en lenguaje natural -> resultados.
+
+    El orden importa y es la decision de diseno del proyecto: los filtros van
+    primero y el ranking semantico despues, solo sobre lo que sobrevive. Al
+    reves (buscar los k mas parecidos y filtrarlos luego) los filtros se
+    comerian parte de los k y una consulta muy filtrada devolveria casi nada.
+    """
+    from embeddings import embeder_consulta
+    from extractor import extraer_filtros
+
+    filtros_pedidos = extraer_filtros(frase)
+    filtros, relajados = relajar(con, filtros_pedidos)
+
+    where, parametros = construir_where(filtros)
+
+    # El subconjunto que pasa los filtros se ordena por distancia calculandola
+    # contra todos sus vectores, en vez de con el KNN de sqlite-vec. El KNN
+    # devuelve los k mas parecidos del catalogo ENTERO, que luego habria que
+    # filtrar: con filtros restrictivos casi ninguno sobrevive. Aqui la
+    # distancia se calcula solo sobre los candidatos, asi que el resultado es
+    # exacto. Comprobado que da las mismas distancias que el KNN.
+    consulta = f"""
+        WITH candidatos AS (
+            SELECT min(a.article_id) AS article_id, {COLUMNAS_RESULTADO},
+                   count(*) AS variantes
+            FROM articulos a
+            WHERE {where}
+            GROUP BY a.product_code
+        )
+        SELECT c.*, vec_distance_L2(v.embedding, ?) AS distancia
+        FROM candidatos c
+        JOIN vec_productos v ON v.product_code = c.product_code
+        ORDER BY distancia
+        LIMIT ?
+    """
+
+    vector = embeder_consulta(filtros.consulta_semantica)
+    filas = con.execute(consulta, [*parametros, vector, limite]).fetchall()
+
+    return {
+        "frase": frase,
+        "total": len(filas),
+        # Los pedidos y los aplicados se devuelven por separado para que el
+        # front pueda ensenar que se pidio y que se solto. Es lo que hace la
+        # demo explicable en vez de magica.
+        "filtros_pedidos": filtros_pedidos.model_dump(),
+        "filtros_aplicados": filtros.model_dump(),
+        "filtros_relajados": relajados,
+        "resultados": [dict(fila) for fila in filas],
+    }
