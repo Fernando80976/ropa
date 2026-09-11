@@ -1,0 +1,47 @@
+# Mantiene despierta la demo de Render durante el horario en que alguien
+# podria abrirla.
+#
+# El plan gratuito duerme el servicio a los 15 minutos sin visitas, y
+# despertarlo tarda cerca de un minuto. Para una demo de portfolio eso es
+# fatal: quien abre el enlace ve una pagina en blanco y se va.
+#
+# POR QUE NO 24 HORAS. Render da 750 horas de instancia al mes por workspace y
+# un mes tiene unas 730, asi que tenerlo despierto siempre consumiria la cuota
+# entera y no quedaria nada para un segundo proyecto. Y al agotarla, Render no
+# degrada el servicio: lo suspende hasta el mes siguiente.
+#
+# Con esta ventana de 14 horas salen unas 425 horas al mes, algo mas de la
+# mitad de la cuota. Fuera de ella el servicio duerme y no gasta.
+
+name: Mantener la demo despierta
+
+on:
+  schedule:
+    # De 07:00 a 20:55 UTC, o sea de 09:00 a 23:00 en Espana en verano.
+    # GitHub Actions interpreta el cron siempre en UTC, nunca en local.
+    - cron: "*/5 7-20 * * *"
+
+  # Permite lanzarlo a mano desde la pestana Actions, util para comprobar que
+  # funciona sin esperar al siguiente hueco.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      # Cada 5 minutos y no cada 10 porque los cron de GitHub Actions se
+      # retrasan cuando hay carga, y un retraso de 5 minutos sobre una ventana
+      # de sueno de 15 deja muy poco margen. Pingear de mas no cuesta nada:
+      # los repositorios publicos tienen minutos de Actions ilimitados, y
+      # mientras el servicio ya este despierto el ping no consume horas extra
+      # de Render.
+      #
+      # Se pide la raiz a proposito: sirve la pagina sin llamar al LLM, asi
+      # que no gasta cuota de Groq.
+      - name: Despertar el servicio
+        run: |
+          curl --silent --show-error --location \
+               --max-time 120 --retry 3 --retry-delay 10 \
+               --output /dev/null \
+               --write-out 'HTTP %{http_code} en %{time_total}s\n' \
+               https://buscador-ropa.onrender.com/

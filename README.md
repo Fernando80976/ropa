@@ -7,9 +7,15 @@ de H&M.
 
 **Demo en vivo: https://buscador-ropa.onrender.com**
 
-> El servidor está en el plan gratuito de Render y se duerme tras 15 minutos
-> sin visitas. Si es la primera consulta del día, la página tarda cerca de un
-> minuto en despertar. Las siguientes van en unos 3 segundos.
+> El servidor está en el plan gratuito de Render, que duerme el servicio tras
+> 15 minutos sin visitas. Un workflow de GitHub Actions lo mantiene despierto
+> de 09:00 a 23:00 (hora española), así que en ese horario responde en unos
+> 3 segundos. Fuera de él, la primera carga tarda cerca de un minuto.
+>
+> La ventana es de 14 horas y no de 24 a propósito: Render da 750 horas de
+> instancia al mes y un mes tiene 730, así que tenerlo despierto siempre
+> consumiría la cuota entera —y al agotarla el servicio queda suspendido hasta
+> el mes siguiente—. Ver [`.github/workflows/mantener-despierto.yml`](.github/workflows/mantener-despierto.yml).
 
 <!-- TODO: GIF de la demo aquí -->
 
